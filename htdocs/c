@@ -1,0 +1,235 @@
+#!/usr/local/gauche/bin/speedygosh --timeout=3600
+;#!/usr/local/gauche/bin/gosh
+
+(add-load-path "/home/yamada/copy-of-svn.tir.jp/Gauche-tir/trunk/lib/")
+(define-module cssgen.cgi
+  (use www.cgi)
+  (use rfc.http)
+  (use text.html-lite)
+  (use text.tree)
+  (use srfi-1)
+  (use srfi-13)
+  (use rfc.uri)
+  (use rfc.http)
+  (use rfc.cookie)
+  (use util.list)
+  (use file.util)
+  (use gauche.charconv)
+  (use tir04.cgi.util)
+  (debug-print-width #f)
+  (export
+    ))
+(select-module cssgen.cgi)
+
+;;; TODO: refererもしくはipによるブラックリスト/ホワイトリスト機能をつける？
+;;; TODO: formの色指定
+;;; TODO: エラー時はエラーログではなく、 "/* エラー内容 */" というcssを出力して示すようにする(いちいちサーバみるの面倒なので、クライアント側から確認できたほうがよい)
+
+
+(define *template-dir* "/var/nekoie/cssdev/template")
+
+
+;; URLから渡せる引数
+;; http://cssdev.tir.jp/c/t-standard/fg-bfbfbf/bg-1f1f1f/lc-0000ff/hoge-20130123.css
+;; - 最初の c はcgiエントリ
+;; - PATH_INFO部分に、スラッシュ区切りで渡す
+;; - key-value 書式
+;; - 色指定は # を抜いた、6桁の16進表記
+;; - 末尾の "hoge-20130123.css" 部分は任意(ファイル名を任意にする為にのみある)
+;;   これを指定する場合、ほぼwgetファイル名用なので、更新時の為に
+;;   日付をつけるの推奨。そのまま使ってもいいし、
+;;   hoge.cssとしてシンボリックリンクにしてもよい
+(define *settings-default*
+  `(
+    ("t" . "standard")
+    ("fg" . "bfbfbf")
+    ("bg" . "1f1f1f")
+    ("lc" . "0000ff")
+    ))
+
+(define (color-str->colors color-str)
+  (and-let* ((m (#/^([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/ color-str))
+             (r (string->number (m 1) 16))
+             (g (string->number (m 2) 16))
+             (b (string->number (m 3) 16))
+             )
+    (list r g b)))
+
+(define (colors->color-str c)
+  (let* ((r (floor (clamp (car c) 0 255)))
+         (g (floor (clamp (cadr c) 0 255)))
+         (b (floor (clamp (caddr c) 0 255))))
+    (format "#~2,'0x~2,'0x~2,'0x" r g b)))
+
+;; テンプレ置換手続き
+;; テンプレファイルに含まれる @HOGE@ という書式の部分が、別の値に置換される
+;; (autoconf書式)
+(define (gen-params fg-color-str bg-color-str link-color-str)
+  (let/cc return
+    (let* (
+           ;; 各色をRGBに分解し、数値化する
+           (c-fg (color-str->colors fg-color-str))
+           (_ (unless c-fg (return #f)))
+           (c-bg (color-str->colors bg-color-str))
+           (_ (unless c-bg (return #f)))
+           (c-link-fg (color-str->colors link-color-str))
+           (_ (unless c-link-fg (return #f)))
+           ;; 中間値を算出
+           (c-fg-quarter (map (lambda (fg-num bg-num)
+                                ;; fg1, bg3の割合で合成する
+                                (+ (* fg-num 1/4) (* bg-num 3/4)))
+                              c-fg
+                              c-bg))
+           (c-fg-half (map (lambda (fg-num bg-num)
+                             ;; fg1, bg1の割合で合成する
+                             (+ (* fg-num 1/2) (* bg-num 1/2)))
+                           c-fg
+                           c-bg))
+           (c-fg-threequarter (map (lambda (fg-num bg-num)
+                                     ;; fg3, bg1の割合で合成する
+                                     (+ (* fg-num 3/4) (* bg-num 1/4)))
+                                   c-fg
+                                   c-bg))
+           (c-visited-fg (map (lambda (link-num bg-num)
+                                ;; link3, bg1の割合で合成する
+                                (+ (* link-num 3/4) (* bg-num 1/4)))
+                              c-link-fg
+                              c-bg))
+           (c-hover-fg c-bg)
+           (c-hover-bg (map (lambda (link-num fg-num)
+                              (+ (* link-num 1/2) (* fg-num 1/2)))
+                            c-link-fg
+                            c-fg))
+           (c-active-fg c-visited-fg)
+           (c-active-bg c-fg)
+           ;; 結果を算出
+           ;; TODO: "transparent"は"rgba(r,g,b,0)"にした方がいいようだ
+           (color-fg (colors->color-str c-fg))
+           (color-fg-quarter (colors->color-str c-fg-quarter))
+           (color-fg-half (colors->color-str c-fg-half))
+           (color-fg-threequarter (colors->color-str c-fg-threequarter))
+           (color-bg (colors->color-str c-bg))
+           (color-a-link-fg (colors->color-str c-link-fg))
+           (color-a-link-bg "transparent")
+           (color-a-visited-fg (colors->color-str c-visited-fg))
+           (color-a-visited-bg "transparent")
+           (color-a-hover-fg (colors->color-str c-hover-fg))
+           (color-a-hover-bg (colors->color-str c-hover-bg))
+           (color-a-active-fg (colors->color-str c-active-fg))
+           (color-a-active-bg (colors->color-str c-active-bg))
+           )
+      `(
+        ;; ("@@で囲まれるキー" . "置換後の値")
+        ("COLOR_FG" . ,color-fg)
+        ("COLOR_FG_QUARTER" . ,color-fg-quarter)
+        ("COLOR_FG_HALF" . ,color-fg-half)
+        ("COLOR_FG_THREEQUARTER" . ,color-fg-threequarter)
+        ("COLOR_BG" . ,color-bg)
+        ("COLOR_A_LINK_FG" . ,color-a-link-fg)
+        ("COLOR_A_LINK_BG" . ,color-a-link-bg)
+        ("COLOR_A_VISITED_FG" . ,color-a-visited-fg)
+        ("COLOR_A_VISITED_BG" . ,color-a-visited-bg)
+        ("COLOR_A_HOVER_FG" . ,color-a-hover-fg)
+        ("COLOR_A_HOVER_BG" . ,color-a-hover-bg)
+        ("COLOR_A_ACTIVE_FG" . ,color-a-active-fg)
+        ("COLOR_A_ACTIVE_BG" . ,color-a-active-bg)
+        ))))
+
+
+
+(define (pathinfo->settings pathinfo)
+  (fold
+    (lambda (entry old)
+      (or
+        (and-let* ((m (#/\-/ entry))
+                   (k (m 'before))
+                   (v (m 'after)))
+          `((,k . ,v) ,@old))
+        old))
+    '()
+    pathinfo))
+
+(define (merge-settings setting-default-alist setting-pathinfo-alist)
+  (append setting-pathinfo-alist setting-default-alist))
+
+(define (slurp file)
+  (guard (e (else #f))
+    (call-with-input-file
+      file
+      port->string
+      )))
+
+(define (css-gen settings)
+  (let/cc return
+    (define (error-end . args)
+      (warn (apply string-append (map x->string args)))
+      (return "")) ; return empty css
+    (let* (
+           (template (assoc-ref settings "t"))
+           (fg-color (assoc-ref settings "fg"))
+           (bg-color (assoc-ref settings "bg"))
+           (link-color (assoc-ref settings "lc"))
+           ;; テンプレートをロードする
+           (template-path
+             (string-append *template-dir* "/" template ".css.in"))
+           (src (slurp template-path))
+           (_ (unless src
+                (error-end "cannot read template : " template-path)))
+           ;; 生成されるべきパラメータを作成
+           (params (gen-params fg-color bg-color link-color))
+           (_ (unless params
+                (error-end "cannot parse parameter : " settings)))
+           ;; パラメータを置換し、結果を生成する
+           (result (fold
+                     (lambda (k+v cur-str)
+                       (let* ((key (car k+v))
+                              (value (cdr k+v))
+                              (re (string->regexp
+                                    (regexp-quote
+                                      (string-append "@" key "@"))))
+                              )
+                         (regexp-replace-all re cur-str value)))
+                     src
+                     params))
+           )
+      result)))
+
+(define (emit-content params)
+  (let* ((path-info-keylist (or (get-path-info-keylist) '()))
+         (settings-default *settings-default*)
+         (settings-pathinfo (pathinfo->settings path-info-keylist))
+         (settings (merge-settings settings-default settings-pathinfo))
+         (css (css-gen settings))
+         )
+    (list
+      (cgi-header :content-type "text/css; charset=utf-8"
+                  :pragma "no-cache"
+                  :cache-control "no-cache")
+      css)))
+
+
+(define (main args)
+  (set! (port-buffering (current-error-port)) :line)
+  (cgi-main
+    emit-content
+    :on-error (lambda (e)
+                (warn (call-with-output-string
+                        (cut with-error-to-port <> (cut report-error e))))
+                (list
+                  (cgi-header :content-type "text/css; charset=utf-8"
+                              :pragma "no-cache"
+                              :cache-control "no-cache")
+                  "")))
+  0)
+
+
+;;;===================================================================
+
+(select-module user)
+(define main (with-module cssgen.cgi main))
+
+;; 日本語あいうえお
+;; Local variables:
+;; mode: scheme
+;; end:
+;; vim: set ft=scheme:

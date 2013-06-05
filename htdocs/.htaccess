@@ -1,0 +1,6 @@
+Options +ExecCGI
+
+<Files ~ "^c$">
+  SetHandler cgi-script
+  ErrorDocument 500 "/empty"
+</Files>
