@@ -313,13 +313,36 @@ optgroup {
   color: #efefef;
   background-color: #3f3f3f;
 }
-select, option, textarea, input {
+select {
+  /*
+  -webkit-appearance: button;
+  -moz-appearance: button;
+  -o-appearance: button;
+  -ms-appearance: button;
+  appearance: button;
+  */
   color: #3f3f3f;
   background-color: #efefef;
   border: solid 1px #bfbfbf;
 }
-select:focus, option:focus, textarea:focus, input:focus {
+select:focus {
   border: solid 1px #ff0f0f;
+}
+textarea, input {
+  color: #3f3f3f;
+  background-color: #efefef;
+  border: solid 1px #bfbfbf;
+}
+textarea:focus, input:focus {
+  border: solid 1px #ff0f0f;
+}
+option {
+  color: #3f3f3f;
+  background-color: #efefef;
+}
+option:focus {
+  color: #efefef;
+  background-color: #3f3f3f;
 }
 button {
   color: #0f0f0f;
