@@ -1,11 +1,6 @@
 @charset "UTF-8";
-/* ---- basic element ---- */
 
-/*
-* {
-  ...
-}
-*/
+/* ---- basic element ---- */
 
 body {
   color: @COLOR_FG@;
@@ -361,4 +356,4 @@ legend {
 
 
 
-/* 日本語あいうえお */
+/* vim:set ft=css fenc=utf-8: */
