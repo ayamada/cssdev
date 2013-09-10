@@ -342,6 +342,7 @@ fieldset {
   font-weight: normal;
   color: #ccc;
   background-color: #ffffff;
+  color: #1f1f1f;
   border: 1px solid #ccc;
   padding: 2px;
   margin: 1em;
@@ -351,7 +352,7 @@ legend {
   font-weight: normal;
   margin-left: 1em;
   padding: 4px;
-  color: #ffffff;
+  color: #1f1f1f;
 }
 
 
