@@ -137,10 +137,17 @@ th {
   font-weight: bold;
   font-size: 90%;
   font-family: monospace;
+  white-space: nowrap;
 }
 td {
   font-size: 90%;
   font-family: monospace;
+}
+thead th {
+  text-align: center;
+}
+tbody th {
+  text-align: right;
 }
 
 
