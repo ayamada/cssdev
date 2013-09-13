@@ -145,9 +145,11 @@ td {
 }
 thead th {
   text-align: center;
+  vertical-align: bottom;
 }
 tbody th {
   text-align: right;
+  vertical-align: middle;
 }
 
 
